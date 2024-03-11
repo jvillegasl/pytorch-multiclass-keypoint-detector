@@ -3,10 +3,13 @@ import torch.nn.functional as F
 import torch
 
 from models.backbone import Backbone
+from models.positional_encoding import PositionalEncoding
+from util.get_padded_queries import get_padded_queries
 
 
 class MulticlassKptsDetector(nn.Module):
     backbone: Backbone
+    pos_encoder: PositionalEncoding
     query_embeddings: nn.ParameterList
     transformer: nn.Transformer
     mlp: nn.Module
@@ -40,11 +43,13 @@ class MulticlassKptsDetector(nn.Module):
             dilation=False
         )
 
+        self.pos_encoder = PositionalEncoding(d_model=self.d_model)
+
         self.transformer = nn.Transformer(
             nhead=n_head,
             num_encoder_layers=num_encoder_layers,
             num_decoder_layers=num_decoder_layers,
-            dim_feedforward=dim_feedforward
+            dim_feedforward=dim_feedforward,
         )
 
     def forward(self, x: Tensor, classes: Tensor):
@@ -53,27 +58,23 @@ class MulticlassKptsDetector(nn.Module):
             - x: `(N, C, H, W)`
             - classes: `(N)`, where: `∀ t ∈ classes, 0 ≤ t < num_classes ∩ t ∈ Z`
         """
-        pass
+        padded_queries, padding_masks = get_padded_queries(
+            classes,
+            self.query_embeddings
+        )
 
-    def get_targets(self, classes: Tensor) -> Tensor:
-        list_embeddings: list[nn.Parameter] = [
-            self.query_embeddings[t] for t in classes]
+        src = self.backbone(x).permute(2, 0, 1)
+        src = self.pos_encoder(src)
 
-        list_num_kpts = [t.size(0) for t in list_embeddings]
+        # implement positional encoding
 
-        max_num_kpts = max(list_num_kpts)
+        y = self.transformer(
+            src=src,
+            tgt=padded_queries,
+            tgt_key_padding_mask=padding_masks
+        )
 
-        list_pad_len = [max_num_kpts - t for t in list_num_kpts]
-
-        tgt = [
-            F.pad(t, (0, 0, 0, pad), "constant", 0).unsqueeze(0)
-            for t, pad in zip(list_embeddings, list_pad_len)
-        ]
-        tgt = torch.cat(tgt)
-
-        
-
-        return Tensor()
+        return y
 
     @property
     def num_classes(self) -> int:
