@@ -1,10 +1,9 @@
 from torch import Tensor, nn
-import torch.nn.functional as F
 import torch
 
 from models.backbone import Backbone
 from models.positional_encoding import PositionalEncoding
-from util.get_padded_queries import get_padded_queries
+from utils.get_padded_queries import get_padded_queries
 
 
 class MulticlassKptsDetector(nn.Module):
@@ -21,14 +20,14 @@ class MulticlassKptsDetector(nn.Module):
             self,
             list_num_kpts: list[int],
             d_model: int,
-            n_head: int,
-            num_encoder_layers: int,
-            num_decoder_layers: int,
-            dim_feedforward: int
+            n_head: int = 4,
+            num_encoder_layers: int = 4,
+            num_decoder_layers: int = 4,
+            dim_feedforward: int = 256,
     ):
-        assert d_model % n_head == 0, "d_model must be divisible by n_head"
-
         super(MulticlassKptsDetector, self).__init__()
+
+        assert d_model % n_head == 0, "d_model must be divisible by n_head"
 
         self.list_num_kpts = list_num_kpts
         self.d_model = d_model
@@ -46,10 +45,12 @@ class MulticlassKptsDetector(nn.Module):
         self.pos_encoder = PositionalEncoding(d_model=self.d_model)
 
         self.transformer = nn.Transformer(
+            d_model=self.d_model,
             nhead=n_head,
             num_encoder_layers=num_encoder_layers,
             num_decoder_layers=num_decoder_layers,
             dim_feedforward=dim_feedforward,
+            batch_first=False
         )
 
     def forward(self, x: Tensor, classes: Tensor):
@@ -66,15 +67,17 @@ class MulticlassKptsDetector(nn.Module):
         src = self.backbone(x).permute(2, 0, 1)
         src = self.pos_encoder(src)
 
-        # implement positional encoding
-
+        tgt = padded_queries.permute(1, 0, 2)
+        print(src.shape)
+        print(padded_queries.shape)
         y = self.transformer(
             src=src,
-            tgt=padded_queries,
+            tgt=tgt,
             tgt_key_padding_mask=padding_masks
         )
+        y = y.permute(1, 0, 2)
 
-        return y
+        return y, padding_masks
 
     @property
     def num_classes(self) -> int:

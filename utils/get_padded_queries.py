@@ -17,14 +17,16 @@ def get_padded_queries(indexes: Tensor, query_embeddings: nn.ParameterList):
 
     Shape:
         - indexes: `(N)`.
-        - query_embeddings: list of parameters `(E_i, T)` where E_i ≤ E_max.
+        - query_embeddings: list of parameters `(T_i, E)` where T_i ≤ T_max.
 
-        - padded_queries: `(N, E_max, T)`.
-        - padding_masks: `(N, E_max, T)`
+        - padded_queries: `(N, T_max, E)`.
+        - padding_masks: `(N, T_max)`
     """
     queries: list[nn.Parameter] = [
         query_embeddings[t] for t in indexes
     ]
+
+    print(len(queries))
 
     queries_lens = [t.size(0) for t in queries]
     max_query_lens = max(queries_lens)
@@ -38,13 +40,15 @@ def get_padded_queries(indexes: Tensor, query_embeddings: nn.ParameterList):
 
     padded_queries = []
     padding_masks = []
-    for t, pad in zip(queries, queries_pads):
-        padded_queries.append(F.pad(t, (0, 0, 0, pad), "constant", 0).unsqueeze(0))
-        # padded_queries.append(t)
-        
-        mask = torch.full_like(t, False, dtype=torch.bool)
-        mask = F.pad(mask, (0, 0, 0, pad), "constant", True).unsqueeze(0)
-        padding_masks.append(mask)
+    for query, pad in zip(queries, queries_pads):
+        padded_queries.append(F.pad(query, (0, 0, 0, pad), "constant", 0).unsqueeze(0))
+
+        mask = torch.zeros(max_query_lens, dtype=torch.bool)
+        print("pad", pad)
+        if pad > 0:
+            mask[-pad:] = True
+        print("mask", mask)
+        padding_masks.append(mask.unsqueeze(0))
     
     padded_queries = torch.cat(padded_queries)
     padding_masks = torch.cat(padding_masks)
