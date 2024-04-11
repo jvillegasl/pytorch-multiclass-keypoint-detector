@@ -26,8 +26,6 @@ def get_padded_queries(indexes: Tensor, query_embeddings: nn.ParameterList):
         query_embeddings[t] for t in indexes
     ]
 
-    print(len(queries))
-
     queries_lens = [t.size(0) for t in queries]
     max_query_lens = max(queries_lens)
 

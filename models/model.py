@@ -17,13 +17,13 @@ class MulticlassKptsDetector(nn.Module):
     d_model: int
 
     def __init__(
-            self,
-            list_num_kpts: list[int],
-            d_model: int,
-            n_head: int = 4,
-            num_encoder_layers: int = 4,
-            num_decoder_layers: int = 4,
-            dim_feedforward: int = 256,
+        self,
+        list_num_kpts: list[int],
+        d_model: int,
+        n_head: int = 4,
+        num_encoder_layers: int = 4,
+        num_decoder_layers: int = 4,
+        dim_feedforward: int = 256,
     ):
         super(MulticlassKptsDetector, self).__init__()
 
@@ -53,12 +53,21 @@ class MulticlassKptsDetector(nn.Module):
             batch_first=False
         )
 
+        self.mlp = nn.Sequential(
+            nn.Linear(self.d_model, 1024),
+            nn.Linear(1024, 2)
+        )
+
     def forward(self, x: Tensor, classes: Tensor):
         """
+        Returns:
+            - out: `MKDPred`
+
         Shape:
             - x: `(N, C, H, W)`
             - classes: `(N)`, where: `∀ t ∈ classes, 0 ≤ t < num_classes ∩ t ∈ Z`
         """
+
         padded_queries, padding_masks = get_padded_queries(
             classes,
             self.query_embeddings
@@ -68,17 +77,59 @@ class MulticlassKptsDetector(nn.Module):
         src = self.pos_encoder(src)
 
         tgt = padded_queries.permute(1, 0, 2)
-        print(src.shape)
-        print(padded_queries.shape)
+
         y = self.transformer(
             src=src,
             tgt=tgt,
             tgt_key_padding_mask=padding_masks
         )
+
         y = y.permute(1, 0, 2)
 
-        return y, padding_masks
+        y = self.mlp(y).sigmoid()
+
+        out = MKDPred(batch_kpts=y, masks=padding_masks)
+
+        return out
 
     @property
     def num_classes(self) -> int:
         return len(self.list_num_kpts)
+
+
+class MKDPred:
+    """
+    Shape:
+        - batch_kpts: `[N, max_num_kpts, 2]`
+        - masks: `[N, max_num_kpts]`
+    """
+
+    batch_kpts: Tensor
+    masks: Tensor
+
+    def __init__(self, batch_kpts: Tensor, masks: Tensor):
+        self.batch_kpts = batch_kpts
+        self.masks = masks
+
+    @property
+    def unmasked_kpts(self) -> list[Tensor]:
+        out: list[Tensor] = []
+
+        for kpts, mask in zip(self.batch_kpts, self.masks):
+            t = kpts[~mask]
+            out.append(t)
+
+        return out
+
+    @property
+    def flat_unmasked_kpts(self) -> Tensor:
+        """
+        Shape:
+            - out: `[kpts_count, 2]`
+        """
+        flat_kpts = self.batch_kpts.flatten(0, 1)
+        flat_masks = ~self.masks.flatten()
+
+        out = flat_kpts[flat_masks]
+
+        return out
