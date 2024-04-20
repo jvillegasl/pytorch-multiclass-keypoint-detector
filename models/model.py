@@ -50,7 +50,7 @@ class MulticlassKptsDetector(nn.Module):
             num_encoder_layers=num_encoder_layers,
             num_decoder_layers=num_decoder_layers,
             dim_feedforward=dim_feedforward,
-            batch_first=False
+            batch_first=True
         )
 
         self.mlp = nn.Sequential(
@@ -75,16 +75,15 @@ class MulticlassKptsDetector(nn.Module):
 
         src = self.backbone(x).permute(2, 0, 1)
         src = self.pos_encoder(src)
+        src = src.permute(1, 0, 2)
 
-        tgt = padded_queries.permute(1, 0, 2)
+        tgt = padded_queries
 
         y = self.transformer(
             src=src,
             tgt=tgt,
             tgt_key_padding_mask=padding_masks
         )
-
-        y = y.permute(1, 0, 2)
 
         y = self.mlp(y).sigmoid()
 

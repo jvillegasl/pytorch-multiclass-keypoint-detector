@@ -10,6 +10,13 @@ LargeBackbone = Literal["resnet50", "resnet101", "resnet152"]
 BackboneName = Union[SmallBackbone, LargeBackbone]
 
 smallBackbones = typing.get_args(SmallBackbone)
+weights = {
+    "resnet18": "ResNet18_Weights.DEFAULT",
+    "resnet34": "ResNet34_Weights.DEFAULT",
+    "resnet50": "ResNet50_Weights.DEFAULT",
+    "resnet101": "ResNet101_Weights.DEFAULT",
+    "resnet152": "ResNet152_Weights.DEFAULT",
+}
 
 
 class Backbone(nn.Module):
@@ -25,7 +32,7 @@ class Backbone(nn.Module):
         self.name = name
         self.backbone = getattr(torchvision.models, self.name)(
             replace_stride_with_dilation=[False, False, dilation],
-            pretrained=True,
+            weights=weights[name],
             norm_layer=FrozenBatchNorm2d,
         )
         self.input_proj = nn.Conv2d(self.num_channels, d_model, kernel_size=1)

@@ -42,10 +42,8 @@ def get_padded_queries(indexes: Tensor, query_embeddings: nn.ParameterList):
         padded_queries.append(F.pad(query, (0, 0, 0, pad), "constant", 0).unsqueeze(0))
 
         mask = torch.zeros(max_query_lens, dtype=torch.bool)
-        print("pad", pad)
         if pad > 0:
             mask[-pad:] = True
-        print("mask", mask)
         padding_masks.append(mask.unsqueeze(0))
     
     padded_queries = torch.cat(padded_queries)
